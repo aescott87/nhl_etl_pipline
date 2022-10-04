@@ -1,4 +1,5 @@
-import axios from 'axios';
+const axios = require('axios');
+const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 
 // Function to gather team data
 const startTeamPipeline = () => {
@@ -8,30 +9,29 @@ const startTeamPipeline = () => {
             axios.get('https://statsapi.web.nhl.com/api/v1/standings?season20182019'),
             axios.get('https://statsapi.web.nhl.com/api/v1/schedule?teamId=12&season=20182019')
         ]).then (response => {
+            // Transform data received from each endpoint
             const teamData = response[0].data;
-            const processedTeamObj = processTeamData(teamData);
-            //console.log(JSON.stringify(processedTeamObj));
+            const processedTeamData = processTeamData(teamData);
             const seasonData = response[1].data;
             const processedSeasonData = processSeasonData(seasonData);
-            //console.log(JSON.stringify(processedSeasonData));
             const gameData = response[2].data;
-            //console.log('All three data points successfully extracted!')
-            //console.log(gameData);
             const processedGameData = processGameData(gameData);
-            console.log(JSON.stringify(processedGameData));
+            const finalDataObj = Object.assign(processedTeamData, processedSeasonData, processedGameData);
+            // Load team data to CSV file
+            loadTeamDataToCsv(finalDataObj);
         })
         .catch (error => {
             console.log(error);
         })
 }
 
-startTeamPipeline();
+//startTeamPipeline();
 
 const processTeamData = (dataObj) => {
     return {
-        teamId: dataObj.teams[0].id,
-        teamName: dataObj.teams[0].name,
-        teamVenueName: dataObj.teams[0].venue.name
+        id: dataObj.teams[0].id,
+        name: dataObj.teams[0].name,
+        venue: dataObj.teams[0].venue.name
     }
 }
 
@@ -57,7 +57,6 @@ const processGameData = (dataObj) => {
     const gameDatesArr = dataObj.dates;
     const regularSeasonArr = gameDatesArr.filter(rec => rec.games[0].gameType === 'R');
     const firstGameData = regularSeasonArr[0];
-    //console.log(JSON.stringify(firstGameData));
     let opposingTeam = '';
     if (firstGameData.games[0].teams.away.team.id != 12) {
         opposingTeam = firstGameData.games[0].teams.away.team.name;
@@ -68,4 +67,27 @@ const processGameData = (dataObj) => {
         firstGameDate: firstGameData.date,
         firstGameOpponent: opposingTeam,
     }
+}
+
+const loadTeamDataToCsv = (dataObj) => {
+    const csvWriter = createCsvWriter({
+        path: 'teamData.csv',
+        header: [
+          {id: 'id', title: 'Team ID'},
+          {id: 'name', title: 'Team Name'},
+          {id: 'venue', title: 'Team Venue Name'},
+          {id: 'gamesPlayed', title: 'Games Played'},
+          {id: 'wins', title: 'Wins'},
+          {id: 'losses', title: 'Losses'},
+          {id: 'points', title: 'Points'},
+          {id: 'goalsPerGame', title: 'Goals Per Game'},
+          {id: 'firstGameDate', title: 'First Season Game Date'},
+          {id: 'firstGameOpponent', title: 'First Season Game Opponent'},
+        ]
+    });
+
+    const data = [dataObj];
+
+    csvWriter.writeRecords(data)
+  .then(()=> console.log('The CSV file was written successfully'));
 }
