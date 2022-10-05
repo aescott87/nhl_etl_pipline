@@ -2,20 +2,21 @@ const axios = require('axios');
 const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 
 // Function to gather team data
-const startTeamPipeline = () => {
+const startTeamPipeline = (id, season) => {
     // First extract the required data
         Promise.all([
-            axios.get('https://statsapi.web.nhl.com/api/v1/teams/12'),
-            axios.get('https://statsapi.web.nhl.com/api/v1/standings?season20182019'),
-            axios.get('https://statsapi.web.nhl.com/api/v1/schedule?teamId=12&season=20182019')
+            axios.get(`https://statsapi.web.nhl.com/api/v1/teams/${id}`),
+            axios.get(`https://statsapi.web.nhl.com/api/v1/standings?season${season}`),
+            axios.get(`https://statsapi.web.nhl.com/api/v1/schedule?teamId=${id}&season=${season}`)
         ]).then (response => {
             // Transform data received from each endpoint
+            console.log('Success!')
             const teamData = response[0].data;
             const processedTeamData = processTeamData(teamData);
             const seasonData = response[1].data;
-            const processedSeasonData = processSeasonData(seasonData);
+            const processedSeasonData = processSeasonData(seasonData, id);
             const gameData = response[2].data;
-            const processedGameData = processGameData(gameData);
+            const processedGameData = processGameData(gameData, id);
             const finalDataObj = Object.assign(processedTeamData, processedSeasonData, processedGameData);
             // Load team data to CSV file
             loadTeamDataToCsv(finalDataObj);
@@ -26,11 +27,11 @@ const startTeamPipeline = () => {
 }
 
 // Function for player pipeline
-const startPlayerPipeline = () => {
+const startPlayerPipeline = (id, season) => {
     // Extract data from API endpoints
     Promise.all([
-        axios.get('https://statsapi.web.nhl.com/api/v1/people/8477474'),
-        axios.get('https://statsapi.web.nhl.com/api/v1/people/8477474/stats?stats=statsSingleSeason&season=20182019')
+        axios.get(`https://statsapi.web.nhl.com/api/v1/people/${id}`),
+        axios.get(`https://statsapi.web.nhl.com/api/v1/people/${id}/stats?stats=statsSingleSeason&season=${season}`)
     ])
     .then((response) => {
         // Transform the data to retain only what is needed
@@ -47,11 +48,11 @@ const startPlayerPipeline = () => {
     })
 }
 
-startPlayerPipeline();
+startPlayerPipeline(8477474, 20182019);
 
-//startTeamPipeline();
+startTeamPipeline(12, 20182019);
 
-const processTeamData = (dataObj) => {
+const processTeamData = (teamObj) => {
     return {
         id: dataObj.teams[0].id,
         name: dataObj.teams[0].name,
@@ -59,11 +60,11 @@ const processTeamData = (dataObj) => {
     }
 }
 
-const processSeasonData = (dataObj) => {
+const processSeasonData = (seasonObj, id) => {
     const teamRecordsArr = dataObj.records[0].teamRecords;
-    const teamSeasonStats = teamRecordsArr.filter(rec => rec.team.id === 12);
+    const teamSeasonStats = teamRecordsArr.filter(rec => rec.team.id === id);
     if (teamSeasonStats.length === 0) {
-        console.log('No season data for this team.');
+        console.log('No data for this team in this season.');
         return false;
     } else {
         const avgGoals = Math.round(teamSeasonStats[0].goalsScored / teamSeasonStats[0].gamesPlayed); 
@@ -77,12 +78,12 @@ const processSeasonData = (dataObj) => {
     }
 }
 
-const processGameData = (dataObj) => {
+const processGameData = (gameObj, id) => {
     const gameDatesArr = dataObj.dates;
     const regularSeasonArr = gameDatesArr.filter(rec => rec.games[0].gameType === 'R');
     const firstGameData = regularSeasonArr[0];
     let opposingTeam = '';
-    if (firstGameData.games[0].teams.away.team.id != 12) {
+    if (firstGameData.games[0].teams.away.team.id != id) {
         opposingTeam = firstGameData.games[0].teams.away.team.name;
     } else {
         opposingTeam = firstGameData.games[0].teams.home.team.name;
@@ -93,7 +94,7 @@ const processGameData = (dataObj) => {
     }
 }
 
-const loadTeamDataToCsv = (dataObj) => {
+const loadTeamDataToCsv = (teamData) => {
     const csvWriter = createCsvWriter({
         path: 'teamData.csv',
         header: [
@@ -110,13 +111,13 @@ const loadTeamDataToCsv = (dataObj) => {
         ]
     });
 
-    const data = [dataObj];
+    const data = [teamData];
 
     csvWriter.writeRecords(data)
   .then(()=> console.log('Team CSV file was written successfully'));
 }
 
-const processPlayerData = (dataObj) => {
+const processPlayerData = (playerObj) => {
     return {
         id: dataObj.people[0].id,
         name: dataObj.people[0].fullName,
@@ -128,7 +129,7 @@ const processPlayerData = (dataObj) => {
     }
 }
 
-const processPlayerStats = (dataObj) => {
+const processPlayerStats = (statsObj) => {
     const stats = dataObj.stats[0].splits[0].stat;
     return {
         assists: stats.assists,
