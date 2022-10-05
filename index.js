@@ -25,6 +25,30 @@ const startTeamPipeline = () => {
         })
 }
 
+// Function for player pipeline
+const startPlayerPipeline = () => {
+    // Extract data from API endpoints
+    Promise.all([
+        axios.get('https://statsapi.web.nhl.com/api/v1/people/8477474'),
+        axios.get('https://statsapi.web.nhl.com/api/v1/people/8477474/stats?stats=statsSingleSeason&season=20182019')
+    ])
+    .then((response) => {
+        // Transform the data to retain only what is needed
+        const playerData = response[0].data;
+        const processedPlayerData = processPlayerData(playerData);
+        const playerStats = response[1].data;
+        const processedPlayerStats = processPlayerStats(playerStats);
+        const finalPlayerObj = Object.assign(processedPlayerData, processedPlayerStats);
+        // Load relevant data to a CSV file
+        loadPlayerDataToCsv(finalPlayerObj);
+    })
+    .catch(error => {
+        console.log(error);
+    })
+}
+
+startPlayerPipeline();
+
 //startTeamPipeline();
 
 const processTeamData = (dataObj) => {
@@ -89,5 +113,53 @@ const loadTeamDataToCsv = (dataObj) => {
     const data = [dataObj];
 
     csvWriter.writeRecords(data)
-  .then(()=> console.log('The CSV file was written successfully'));
+  .then(()=> console.log('Team CSV file was written successfully'));
 }
+
+const processPlayerData = (dataObj) => {
+    return {
+        id: dataObj.people[0].id,
+        name: dataObj.people[0].fullName,
+        team: dataObj.people[0].currentTeam.name,
+        age: dataObj.people[0].currentAge,
+        number: dataObj.people[0].primaryNumber,
+        position: dataObj.people[0].primaryPosition.name,
+        rookie: dataObj.people[0].rookie
+    }
+}
+
+const processPlayerStats = (dataObj) => {
+    const stats = dataObj.stats[0].splits[0].stat;
+    return {
+        assists: stats.assists,
+        goals: stats.goals,
+        games: stats.games,
+        hits: stats.hits,
+        points: stats.points
+    }
+}
+
+const loadPlayerDataToCsv = (playerData) => {
+    const csvWriter = createCsvWriter({
+        path: 'playerData.csv',
+        header: [
+          {id: 'id', title: 'Player ID'},
+          {id: 'name', title: 'Player Name'},
+          {id: 'team', title: 'Current Team'},
+          {id: 'age', title: 'Current Age'},
+          {id: 'number', title: 'Player Number'},
+          {id: 'position', title: 'Player Position'},
+          {id: 'rookie', title: 'Is Player a Rookie?'},
+          {id: 'assists', title: 'Assists'},
+          {id: 'goals', title: 'Goals'},
+          {id: 'games', title: 'Games'},
+          {id: 'hits', title: 'Hits'},
+          {id: 'points', title: 'Points'},
+        ]
+    });
+
+    const data = [playerData];
+
+    csvWriter.writeRecords(data)
+  .then(()=> console.log('Player CSV file was written successfully'));
+} 
